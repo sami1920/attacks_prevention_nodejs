@@ -1,31 +1,81 @@
 const express = require("express");
 const bodyParser = require("body-parser");
+const { Sequelize, DataTypes } = require("sequelize");
 
 const app = express();
 const port = 3000;
 
-// Use middleware to parse the request body
-app.use(bodyParser.urlencoded({ extended: true }));
+// MySQL connection using ORM
+const sequelize = new Sequelize("attacks", "root", "", {
+  host: "localhost",
+  dialect: "mysql",
+});
 
-// Serve static files from the 'public' directory
+// Define a User model for the "users" table
+const User = sequelize.define(
+  "User",
+  {
+    name: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    password: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+  },
+  {
+    timestamps: false,
+  }
+);
+
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
-// Route for serving the HTML form
-app.get("/", (req, res) => {
-  res.sendFile(__dirname + "/index.html");
-});
+// Sync the database and start the server
+sequelize.sync().then(() => {
+  console.log("Database synced successfully!");
 
-// Route for handling form submissions
-app.post("/submit", (req, res) => {
-  const email = req.body.email;
-  const password = req.body.password;
+  // Route for serving the HTML form
+  app.get("/", (req, res) => {
+    res.sendFile(__dirname + "/index.html");
+  });
 
-  alert(`Received form submission:\nEmail: ${email}\nPassword: ${password}`);
+  // Route for handling form submissions
+  app.post("/submit", async (req, res) => {
+    const name = req.body.name;
+    const password = req.body.password;
 
-  // Redirect the user or send a response as needed
-  res.send("Form submitted successfully!");
-});
+    try {
+      // Find the user using ORM
+      const user = await User.findOne({
+        where: {
+          name: name,
+          password: password,
+        },
+      });
 
-app.listen(port, () => {
-  console.log(`Server listening at http://localhost:${port}`);
+      // Find the user using raw MySQL Query of sequelize
+      // const [user, metadata] = await sequelize.query(
+      //   `SELECT * FROM Users WHERE name = :name AND password = :password LIMIT 1`,
+      //   {
+      //     replacements: { name, password },
+      //     type: sequelize.QueryTypes.SELECT,
+      //   }
+      // );
+
+      if (user) {
+        res.send("Congrats! User found successfully!");
+      } else {
+        res.send("User not found!");
+      }
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).send("Internal Server Error");
+    }
+  });
+
+  app.listen(port, () => {
+    console.log(`Server listening at http://localhost:${port}`);
+  });
 });
